@@ -13,15 +13,19 @@ type GeminiGenerateResponse = {
 
 function buildPrompt(userPrompt: string): string {
   const embedded = JSON.stringify(userPrompt);
-  return `You are a Magic 8 Ball–style advisor. For the user's question, reply with ONLY valid JSON (no markdown, no code fences) in this exact shape:
-{"options":["first suggestion","second suggestion","third suggestion"]}
+  return `The user asked a real question. You must give three different advisory angles that clearly refer to what they are asking about (same topic, people, or decision—not generic life advice).
 
-Rules:
-- Exactly 3 strings in "options", each 8–40 words, distinct tones (e.g. proceed / wait / cautious).
-- Practical and kind; no fatalism, no medical/legal certainty, no hate.
-- Plain text inside strings only (no line breaks inside a string).
+Reply with ONLY valid JSON (no markdown, no code fences) exactly in this shape:
+{"options":["…","…","…"]}
 
-Question: ${embedded}`;
+Hard rules:
+- Exactly 3 strings in "options", each 10–45 words.
+- Each option must mention or clearly imply the subject of their question (restate a noun/verb from it, or paraphrase the situation). No vague fortune-cookie lines that could apply to anyone.
+- Option A: lean toward acting / yes / moving forward. Option B: lean toward waiting / gathering more info. Option C: lean toward caution / smaller step / risk-aware.
+- Practical and kind. No medical, legal, or financial certainty. No hate or harassment.
+- One paragraph per string; no line breaks inside a string.
+
+User question: ${embedded}`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -51,9 +55,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      system_instruction: {
+        parts: [
+          {
+            text: 'You only output JSON. Each suggestion must explicitly address the user’s question—reuse their topic, choice, or named people. No generic advice that ignores what they asked.',
+          },
+        ],
+      },
       contents: [{ role: 'user', parts: [{ text: buildPrompt(prompt) }] }],
       generationConfig: {
-        temperature: 0.85,
+        temperature: 0.55,
         responseMimeType: 'application/json',
       },
     }),
@@ -66,7 +77,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(502).json({ error: msg });
   }
 
-  const text = raw.candidates?.[0]?.content?.parts?.[0]?.text;
+  const candidate = raw.candidates?.[0];
+  const finish = (candidate as { finishReason?: string } | undefined)?.finishReason;
+  if (finish && finish !== 'STOP') {
+    return res.status(502).json({ error: `Model stopped: ${finish}` });
+  }
+
+  const text = candidate?.content?.parts?.[0]?.text;
   if (!text) {
     return res.status(502).json({ error: 'Empty model response' });
   }

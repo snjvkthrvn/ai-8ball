@@ -34,16 +34,6 @@ const SCRAMBLE_DURATION_MS = 1400;
 const SCRAMBLE_INTERVAL_MS = 70;
 const SETTLE_MS = 520;
 
-/** Classic 8-ball-style decoys mixed into the scramble for visual variety. */
-const SCRAMBLE_DECOYS = [
-  'Hmm…',
-  'Reply hazy.',
-  'Ask again.',
-  'Cannot tell.',
-  'Concentrating…',
-  'Maybe.',
-];
-
 export default function App() {
   const [appState, setAppState] = useState<AppState>('idle');
   const [prompt, setPrompt] = useState('');
@@ -54,6 +44,8 @@ export default function App() {
   const [speechState, setSpeechState] = useState<SpeechPermissionState>(() => getSpeechRecognitionSupport());
   const [motionPermission, setMotionPermission] = useState<MotionPermission>('unknown');
   const [submitBusy, setSubmitBusy] = useState(false);
+  /** Which brain fed the three options (shown small in the masthead). */
+  const [oracleSource, setOracleSource] = useState<'gemini' | 'local' | null>(null);
 
   const shakeController = useRef(createShakeController());
   const lastPointer = useRef<PointerSample | null>(null);
@@ -120,7 +112,11 @@ export default function App() {
     }
 
     const finalAnswer = options[Math.floor(Math.random() * options.length)];
-    const scramblePool = [...options, ...SCRAMBLE_DECOYS];
+    // Only cycle the real three options so nothing unrelated flashes on screen.
+    const scramblePool =
+      options.length >= 3
+        ? [...options, ...options, ...options, ...options]
+        : [...options];
 
     setAppState('revealing');
     // First scramble pick is shown immediately so the face never blanks.
@@ -217,16 +213,20 @@ export default function App() {
 
     setSubmitBusy(true);
     let generatedOptions = createMockDecisionOptions(trimmed);
+    let usedGemini = false;
     try {
       const fromApi = await fetchOracleOptions(trimmed);
       if (fromApi.length >= 3) {
         generatedOptions = fromApi.slice(0, 3);
+        usedGemini = true;
       }
-    } catch {
-      // Local `vite` has no `/api` — expected. Production uses Vercel function.
+    } catch (error) {
+      console.warn('[oracle] Gemini request failed — using built-in options.', error);
     } finally {
       setSubmitBusy(false);
     }
+
+    setOracleSource(usedGemini ? 'gemini' : 'local');
 
     setOptions(generatedOptions);
     setAnswer(null);
@@ -240,6 +240,7 @@ export default function App() {
     setOptions([]);
     setAnswer(null);
     setAppState('idle');
+    setOracleSource(null);
     resetShake();
     window.setTimeout(() => promptRef.current?.focus(), 0);
   }, [resetShake]);
@@ -397,7 +398,15 @@ export default function App() {
       <section className="oracle-space" aria-label="8-ball decision space">
         <div className="masthead">
           <p>8 Ball</p>
-          <span>{motionPermission === 'denied' ? 'Touch shake active' : 'Quiet Oracle'}</span>
+          <span>
+            {oracleSource === 'gemini'
+              ? 'Gemini answers'
+              : oracleSource === 'local'
+                ? 'Built-in answers (oracle unavailable)'
+                : motionPermission === 'denied'
+                  ? 'Touch shake active'
+                  : 'Quiet Oracle'}
+          </span>
         </div>
         <EightBall
           answer={answer}
