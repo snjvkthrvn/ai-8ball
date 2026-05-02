@@ -54,6 +54,7 @@ export function DecisionInput({
           disabled={inputDisabled}
           onChange={(event) => onChange(event.target.value)}
           placeholder="Ask the ball..."
+          maxLength={500}
           autoComplete="off"
         />
         <button

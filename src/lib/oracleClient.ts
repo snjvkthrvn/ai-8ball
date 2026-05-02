@@ -1,11 +1,16 @@
+const MAX_PROMPT_LENGTH = 500;
+
 /**
- * Calls the serverless `/api/oracle` route (Gemini on the server). Same-origin
- * on Vercel; for local API use `VITE_ORACLE_BASE_URL` (see `.env.example`).
+ * Calls the serverless `/api/oracle` route. Same-origin on Vercel;
+ * for local dev use `VITE_ORACLE_BASE_URL` (see `.env.example`).
  */
 export async function fetchOracleOptions(prompt: string): Promise<string[]> {
   const trimmed = prompt.trim();
   if (!trimmed) {
     return [];
+  }
+  if (trimmed.length > MAX_PROMPT_LENGTH) {
+    throw new Error(`Question must be ${MAX_PROMPT_LENGTH} characters or fewer`);
   }
 
   const base = import.meta.env.VITE_ORACLE_BASE_URL?.replace(/\/$/, '') ?? '';

@@ -276,14 +276,13 @@ export default function App() {
     }
 
     recognizer.current = nextRecognizer;
-    setAppState('listening');
 
     try {
       nextRecognizer.start();
       setSpeechState('granted');
+      setAppState('listening');
     } catch {
       setSpeechState('denied');
-      setAppState('idle');
     }
   }, [appState, inputLocked, speechState]);
 
